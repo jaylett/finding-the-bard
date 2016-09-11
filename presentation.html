@@ -1,0 +1,646 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" 
+	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<title>Finding the Bard</title>
+<!-- metadata -->
+<meta name="generator" content="S5" />
+<meta name="version" content="S5 1.1" />
+<meta name="presdate" content="20060903" />
+<meta name="author" content="James Aylett" />
+<meta name="company" content="xapian.org" />
+<!-- configuration parameters -->
+<meta name="defaultView" content="slideshow" />
+<meta name="controlVis" content="hidden" />
+<!-- style sheet links -->
+<!--<link rel="stylesheet" href="ui/default/slides.css" type="text/css" media="projection" id="slideProj" />-->
+<link rel="stylesheet" href="ui/i18n/slides.css" type="text/css" media="projection" id="slideProj" />
+<link rel="stylesheet" href="ui/default/outline.css" type="text/css" media="screen" id="outlineStyle" />
+<link rel="stylesheet" href="ui/default/print.css" type="text/css" media="print" id="slidePrint" />
+<link rel="stylesheet" href="ui/default/opera.css" type="text/css" media="projection" id="operaFix" />
+<!-- S5 JS -->
+<script src="ui/default/slides.js" type="text/javascript"></script>
+</head>
+<body>
+
+<div class="layout">
+<div id="controls"><!-- DO NOT EDIT --></div>
+<div id="currentSlide"><!-- DO NOT EDIT --></div>
+<div id="header"></div>
+<div id="footer">
+<h1>Barcamp London</h1>
+<h2>Finding the Bard</h2>
+</div>
+
+</div>
+
+
+<div class="presentation">
+
+<div class="slide">
+<h1>Finding the Bard</h1>
+<h2>Python, Xapian and Shakespeare</h2>
+<h3>James Aylett</h3>
+<h4>xapian.org</h4>
+</div>
+
+
+<div class="slide">
+<h1>Quotable Shakespeare</h1>
+<div class="slidecontent">
+<ul class="incremental">
+<li><q>Shall I compare thee to a summer's</q> ... ?</li>
+<li>Romeo, Romeo, what's the rest of this speech please?</li>
+<li>Hedgehog</li>
+<li>Shakespeare wrote too much</li>
+</ul>
+</div>
+<div class="handout">
+37 plays, 154 sonnets and various lost works, including 1602's apologia for The Merry Wives of Windsor, in which Pistol punctures Falstaff with a pin in act 1 scene 2, and spends the rest of the play giggling uncontrollably.
+</div>
+</div>
+
+<div class="slide">
+<h1>Can we Google?</h1>
+</div>
+
+<div class="slide">
+<h1>Can we <span style='text-decoration: line-through'>Google</span> Y! Search?</h1>
+<div class="slidecontent">
+<ul class="incremental">
+<li><q>Shall I compare thee to a summer's ... ?</q> - first hit</li>
+<li><q>Romeo, Romeo ...</q> - tough with only the start</li>
+<li><q>Hedgehog</q> - really, did you expect it to work?</li>
+</div>
+</div>
+
+<div class="slide">
+<h1>Can we grep?</h1>
+<div class="slidecontent">
+<ul class="incremental">
+<li>We can find the exact text
+<pre class="incremental">
+$ grep summer\'s.day shaks12.txt
+  Shall I compare thee to a summer's day?
+    as you shall see in a summer's day. But it is very well; what he
+    desire in a summer's day. Here is his Majesty.
+    Like stinging bees in hottest summer's day,
+</pre>
+</li>
+<li>Then search again for the whole lot
+<pre class="incremental">
+$ grep -A14 "Shall I compare thee to a summer's day?" shaks12.txt
+  Shall I compare thee to a summer's day?
+  Thou art more lovely and more temperate:
+  Rough winds do shake the darling buds of May,
+  And summer's lease hath all too short a date:
+  [...]
+</pre>
+</li>
+<li>Awkward, and don't know where it came from</li>
+</ul>
+</div>
+<div class="handout">
+Complete Works of William Shakespeare, from Project Gutenberg (copyrighted World Library, Inc.): <a href='http://www.gutenberg.org/etext/100'>http://www.gutenberg.org/etext/100</a>
+</div>
+</div>
+
+<div class="slide">
+<h1>Can we use sed?</h1>
+<div class="slidecontent">
+<pre class="incremental">
+:top
+/^[0-9]\+\r$/ b title
+/^ACT/ { x; s/ACT.*$//; s/.$//; G; x }
+/hedgehog/ { x; p; x; p; i\
+
+}
+d # goes to top
+:title
+n; /^.$/ n; x; d; b top;
+</pre>
+<p></p>
+<pre class="incremental">
+$ sed -n -f find.sed shaks12.txt
+A MIDSUMMER NIGHT'S DREAM
+ACT II. SCENE I.
+               Thorny hedgehogs, be not seen;
+<!--
+KING RICHARD III
+ACT I. SCENE 1.
+  ANNE. Dost grant me, hedgehog? Then, God grant me to
+-->
+[...]
+</pre>
+<ul class="incremental">
+<li>'hedgehog' is hardcoded ... and <em>eww</em></li>
+</ul>
+</div>
+</div>
+
+<div class="slide">
+<h1>What if you get it wrong?</h1>
+<div class="slidecontent">
+<ul class="incremental">
+<li><q>Romeo, Romeo ...</q> again</li>
+<li><q>Cousins, that strive by factions and by friends ambitiously for rule and empery ...</q>
+<pre class="incremental">$ grep cousins.*factions shaks12.txt</pre>
+<pre class="incremental">$ grep cousins.*friends shaks12.txt</pre>
+<pre class="incremental">$ grep cousins.*empery shaks12.txt</pre>
+<pre class="incremental">$ grep friends.*empery shaks12.txt</pre>
+<pre class="incremental">$ grep factions.*friends shaks12.txt
+  MARCUS. Princes, that strive by factions and by friends
+</pre>
+</li>
+<li>Lines in blank verse are short, so speeches get split</li>
+</ul>
+</div>
+</div>
+
+<div class="slide">
+<h1>Let's use Xapian</h1>
+<div class="slidecontent">
+<ul class="incremental">
+<li>Search engine <em>library</em></li>
+<li>Probabilistic and boolean (filtering) operations</li>
+<li>(Fairly) portable C++, with language bindings</li>
+<li>Stemming</li>
+<li>omega: out of the box tool</li>
+<li>But let's do it directly because it's more fun</li>
+</ul>
+</div>
+</div>
+
+<div class="slide">
+<h1>Xapian basics</h1>
+<div class="slidecontent">
+<ul class="incremental">
+<li>Databases contain Documents</li>
+<li>WritableDatabases take care of locking</li>
+<li>Documents contain terms (eg: words)</li>
+<li>Terms can have positions (for proximity searching)</li>
+<li>In general terms aren't simply words (eg: stemming)</li>
+<li>Documents also have arbitrary data</li>
+<li>... and some other stuff</li>
+</ul>
+</div>
+</div>
+
+<div class="slide">
+<h1>A Xapian indexer for Shakespeare</h1>
+<div class="slidecontent">
+<ul class="incremental">
+<li>Jon Bosak's XML version of the plays</li>
+<li>Structure
+<ul class="incremental">
+<li>PLAY, ACT, SCENE</li><li>SPEECH, STAGEDIR</li><li>SPEAKER, LINE</li>
+<li>TITLE (of PLAY, ACT or SCENE)</li>
+</ul>
+<li>SAX parser</li>
+<li>State machine
+<ul class="incremental">
+<li>foo (PLAY, ACT, SCENE)</li>
+<li>foo-title</li>
+<li>speaker, line, stagedir</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="handout">
+Shakespeare in XML: <a href='http://www.ibiblio.org/xml/examples/shakespeare/'>http://www.ibiblio.org/xml/examples/shakespeare/</a>
+</div>
+</div>
+
+<div class="slide">
+<h1>Indexing strategy</h1>
+<div class="slidecontent">
+<ul class="incremental">
+<li>One scene = one document</li>
+<li>Omega compatible terms
+<ul class="incremental">
+<li>Initial letter is special</li>
+<li>Words are lowercased and stemmed</li>
+<li>Initial capital =&gt; R prefixed, unstemmed</li>
+<li>S prefix: titles (&quot;subject&quot;)</li>
+<li>XS prefix: speaker</li>
+<li>Q prefix: unique term identifying document</li>
+</ul>
+</li>
+<li>Positions: put 10 between each title</li>
+</ul>
+</div>
+</div>
+
+<div class="slide">
+<h1>Our indexer: setup</h1>
+<div class="slidecontent">
+<pre>
+class Handler(xml.sax.handler.ContentHandler):
+    def __init__(self, filename):
+        self.play = ''
+        self.act = ''
+        self.scene = ''
+        self.state = '' # we'll do this using strings
+        self.doc = xapian.Document()
+        self.position = 1
+        self.filename = filename
+        self.stemmer = xapian.Stem("en")
+        self.act_count = 0
+        self.scene_count = 0
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>Our indexer: start element</h1>
+<div class="slidecontent">
+<pre>
+class Handler(xml.sax.handler.ContentHandler):
+    def startElement(self, name, attrs):
+        if name=='PLAY':
+            self.state='play'
+        elif name=='PERSONAE':
+            self.state='personae'
+        elif name in ('INDUCT', 'ACT', 'PROLOGUE', 'EPILOGUE'):
+            self.act_count += 1
+            self.state='act'
+        elif name=='SCENE':
+            self.scene_count += 1
+            self.state='scene'
+        elif name=='TITLE':
+            if self.state in ('play', 'personae', 'act', 'scene'):
+                self.state="%s-title" % self.state
+        elif name=='STAGEDIR':
+            self.state='stagedir'
+        elif name=='SPEAKER':
+            self.state='speaker'
+        elif name=='LINE':
+            self.state='line'
+
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>Our indexer: content</h1>
+<div class="slidecontent">
+<pre>
+class Handler(xml.sax.handler.ContentHandler):
+    def characters(self, content):
+        if self.state=='play-title':
+            self.play += ' ' + content
+        elif self.state=='personae-title':
+            pass
+        elif self.state=='act-title':
+            self.act += ' ' + content
+        elif self.state=='scene-title':
+            self.scene += ' ' + content
+        elif self.state=='stagedir' or self.state=='line':
+            self.index_text(content)
+        elif self.state=='speaker':
+            self.index_text(content)
+            self.index_text(content, 'XS')
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>Our indexer: end element</h1>
+<div class="slidecontent">
+<pre>
+class Handler(xml.sax.handler.ContentHandler):
+    def endElement(self, name):
+        if name=='LINE':
+            self.state='scene'
+        elif name=='SPEAKER':
+            self.state='scene'
+        elif name=='STAGEDIR':
+            self.state='scene'
+        elif name=='TITLE':
+            if self.state[-6:]=='-title':
+                self.state=self.state[:-6]
+        elif name=='SCENE':
+            unique_term = self.add_stuff() # index titles, create doc data
+            get_db().replace_document(unique_term, self.doc)
+            self.doc = xapian.Document()
+            self.scene = ''
+        elif name=='ACT':
+            self.act = ''
+        elif name=='PLAY':
+            self.play = ''
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>Our indexer: gubbins</h1>
+<div class="slidecontent">
+<pre>
+class Handler(xml.sax.handler.ContentHandler):
+    def add_stuff(self):
+        self.index_text(self.play, 'S', 10)
+        self.index_text(self.act, 'S', 10)
+        self.index_text(self.scene, 'S', 10)
+        self.index_text(self.scene, '', 10)
+        data = "play=%s\nact=%s\nscene=%s\nfilename=%s" % (safe(self.play),
+                safe(self.act), safe(self.scene), self.filename)
+        self.doc.set_data(data)
+        unique_term = "Q-%s-%i-%i" % (self.filename, self.act_count, self.scene_count)
+        self.doc.add_term(unique_term)
+        return unique_term
+
+# get_db() is a singleton WritableDatabase constructor:
+# xapian.WritableDatabase('shakespeare', xapian.DB_CREATE_OR_OPEN)
+
+def safe(s): # Get rid of characters we can't carry in document data
+    return str(s).replace("\n", " ")
+
+def p_plusminus(c):
+    return c=='+' or c=='-'
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>Our indexer: index_text</h1>
+<div class="slidecontent">
+<pre>
+class Handler(xml.sax.handler.ContentHandler):
+    def index_text(self, text, prefix='', position_inc=0, wdfinc=1):
+</pre>
+<pre class="incremental">
+        ...
+</pre>
+<p class="incremental">
+This is pretty big.
+</div>
+<p class="incremental">
+If you're really interested, ask me afterwards.
+</p>
+<pre class="incremental">
+if __name__ == "__main__":
+    import sys
+    for fname in sys.argv[1:]:
+        index_file(fname)
+</pre>
+<p class="incremental">
+Let's go!
+</p>
+</div>
+</div>
+
+<div class="slide">
+<h1>Search concepts</h1>
+<div class="slidecontent">
+<ul class="incremental">
+<li>A Query object represents a search</li>
+<li>We can use the QueryParser to build Queries easily</li>
+<li>An Enquire object is created on a specific database</li>
+<li>The Enquire object returns the MSet (match set)</li>
+<li>Matches have a rank, percent relevance, and the matching document</li>
+</ul>
+</div>
+</div>
+
+<div class="slide">
+<h1>Build a query</h1>
+<div class="slidecontent">
+<pre class="incremental">
+def auto_enquote(x):
+    if x.find(" ")==-1:
+        return x
+    else:
+        return '"' + x + '"'
+</pre>
+<pre class="incremental">
+if __name__ == "__main__":
+    import sys
+    query = " ".join(map(auto_enquote, sys.argv[1:]))
+</pre>
+<pre class="incremental">
+    qp = xapian.QueryParser()
+    qp.add_prefix("title", "S")
+    qp.add_prefix("speaker", "XS")
+    qp.set_stemmer(xapian.Stem("en"))
+    qp.set_stemming_strategy(xapian.QueryParser.STEM_ALL)
+    qp.set_default_op(xapian.Query.OP_OR)
+</pre>
+<pre class="incremental">
+    db = xapian.Database("shakespeare")
+    qp.set_database(db)
+    q = qp.parse_query(query)
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>Run the query</h1>
+<div class="slidecontent">
+<pre class="incremental">
+    enq = xapian.Enquire(db)
+    enq.set_query(q)
+    mset = enq.get_mset(0, 10)
+</pre>
+<pre class="incremental">
+    for match in mset:
+        data = match[4].get_data()
+        def r(x, y):
+            x[y.split('=')[0]]=y.split('=')[1]
+            return x
+        f = reduce(r, data.split('\n'), {})
+</pre>
+<pre class="incremental">
+        print "%2.2i (%3.3i%%) %s, %s, %s" % (match[2]+1,
+                                              match[3],
+                                              f['play'],
+                                              f['act'],
+                                              f['scene'])
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>Some results</h1>
+<div class="slidecontent">
+<pre>
+$ ./search.py cousins that strive by factions and by friends
+01 (080%) The Life of Timon of Athens, ACT III, SCENE V.  The same. The senate-house. The Senate sitting.
+02 (067%) The Tragedy of Titus Andronicus, ACT I, SCENE I.  Rome. Before the Capitol.
+[...]
+</pre>
+<ul class="incremental">
+<li>Search is better than sed ...</li>
+<li>... but the output isn't as helpful</li>
+<li>Because of stemming, don't have the words in the database</li>
+<li>Could change our stemming strategy</li>
+<li>Instead, index at SPEECH level</li>
+</ul>
+</div>
+</div>
+
+<div class="slide">
+<h1>Changes to the indexer</h1>
+<div class="slidecontent">
+<pre class="incremental">
+class Handler(xml.sax.handler.ContentHandler):
+    def __init__(self, filename):
+        [...]
+        self.speech_count = 0
+        self.speech = ''
+</pre>
+<pre class="incremental">
+    def add_stuff(self):
+        [...]
+        data = "play=%s\nact=%s\nscene=%s\nspeech=%s\nfilename=%s" % (safe(self.play),
+                                                                     safe(self.act),
+                                                                     safe(self.scene),
+                                                                     safe(self.speech),
+                                                                     self.filename)
+        unique_term = "Q-%s-%i-%i-%i" % (self.filename, self.act_count,
+                                         self.scene_count, self.speech_count)
+</pre>
+<pre class="incremental">
+    def startElement(self, name, attrs):
+	[...]
+        elif name=='STAGEDIR' or name=='SPEECH':
+            if self.state!='speech':
+                self.speech_count += 1
+                self.state='speech'
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>Changes to the indexer</h1>
+<div class="slidecontent">
+<pre>
+class Handler(xml.sax.handler.ContentHandler):
+    def endElement(self, name):
+        if name=='LINE':
+            self.state='speech'
+        elif name=='SPEAKER':
+            self.state='speech'
+        elif name=='STAGEDIR':
+            if self.state=='speech':
+                self.add_doc()
+                self.speech = ''
+                self.state = 'scene'
+            else:
+                self.state='speech'
+        elif name=='SPEECH':
+            self.add_doc()
+            self.speech = ''
+            self.state = 'scene'
+        elif name=='SCENE':
+            self.scene = ''
+        [...]
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>Changes to the indexer</h1>
+<div class="slidecontent">
+<pre>
+class Handler(xml.sax.handler.ContentHandler):
+    def characters(self, content):
+        [...]
+        elif self.state=='stagedir' or self.state=='line':
+            self.index_text(content)
+            self.speech += "\n" + content
+        elif self.state=='speaker':
+            self.index_text(content)
+            self.index_text(content, 'XS')
+            self.speech += "\n" + content
+
+    def add_doc(self):
+        unique_term = self.add_stuff()
+        get_db().replace_document(unique_term, self.doc)
+        self.doc = xapian.Document()
+
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>Differences at SPEECH level</h1>
+<div class="slidecontent">
+<ul class="incremental">
+<li>Generates many more documents (35000 compared to 750)</li>
+<li>Takes longer to run (16m compared to 20s)</li>
+<li>Cannot search across speeches</li>
+<li>Code is more awkward because of STAGEDIR</li>
+<li>None of this matters</li>
+</ul>
+</div>
+</div>
+
+<div class="slide">
+<h1>Changes to the search script</h1>
+<div class="slidecontent">
+<pre>
+        import textwrap
+        print "%2.2i (%3.3i%%) %s, %s, %s\n%s" % (match[2]+1,
+                                                  match[3],
+                                                  f['play'],
+                                                  f['act'],
+                                                  f['scene'],
+                                                  "\n".join(textwrap.wrap(f['speech'])))
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>The new output</h1>
+<div class="slidecontent">
+<pre class="incremental">
+$ ./search.py cousins that strive by factions and by friends
+01 (083%)  The Tragedy of Titus Andronicus,  ACT I,  SCENE I.  Rome. Before the Capitol.
+ MARCUS ANDRONICUS Princes, that strive by factions and by friends
+Ambitiously for rule and empery, Know that the people of Rome, for
+whom we stand A special party, have, by common voice, In election for
+the Roman empery, Chosen Andronicus, surnamed Pius For many good and
+great deserts to Rome: A nobler man, a braver warrior, Lives not this
+day within the city walls: He by the senate is accit'd home From weary
+wars against the barbarous Goths; That, with his sons, a terror to our
+foes, Hath yoked a nation strong, train'd up in arms. Ten years are
+spent since first he undertook This cause of Rome and chastised with
+arms Our enemies' pride: five times he hath return'd Bleeding to Rome,
+bearing his valiant sons In coffins from the field; And now at last,
+laden with horror's spoils, Returns the good Andronicus to Rome,
+Renowned Titus, flourishing in arms. Let us entreat, by honour of his
+name, Whom worthily you would have now succeed. And in the Capitol and
+senate's right, Whom you pretend to honour and adore, That you
+withdraw you and abate your strength; Dismiss your followers and, as
+suitors should, Plead your deserts in peace and humbleness.
+[...]
+</pre>
+</div>
+</div>
+
+<div class="slide">
+<h1>Questions?</h1>
+<div class="slidecontent">
+<h2>James Aylett</h2>
+<h3>james@tartarus.org</h3>
+</div>
+</div>
+
+<div class="slide">
+<h1>Bardcamp</h1>
+<div class="slidecontent">
+<ul>
+<li>Index Atom; if you used Omega conventions, wouldn't need a distinct search system</li>
+<li>Omega has a basic OpenSearch template available, but not up to date</li>
+<li>Minor dragon: documentation is scattered over website, wiki and mailing lists (but we're friendly people)</li>
+</ul>
+</div>
+<div class="handout">
+Unpack this zip on a python (+ python libxml2, python libxslt) CGI-happy webserver and look at search.html for a live search on the database (you have to run indexer3.py to generate the database first). Uses async HTTP requests from Javascript, and probably only works in Firefox (sorry - very proof of concept).
+</div>
+</div>
+
+</body>
+</html>
